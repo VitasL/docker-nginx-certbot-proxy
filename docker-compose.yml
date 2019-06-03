@@ -1,0 +1,43 @@
+version: '2'
+services:
+  nginx-root:
+    restart: always
+    image: ${NGINX_ROOT_IMAGE}:${NGINX_ROOT_IMAGE_TAG}
+    container_name: ${NGINX_ROOT_NAME}
+    ports:
+      - ${NGINX_ROOT_HTTP_PORT}:80
+      - ${NGINX_ROOT_HTTPS_PORT}:443
+    volumes:
+      - /etc/nginx/conf.d
+      - /etc/nginx/vhost.d
+      - /usr/share/nginx/html
+      - ${NGINX_CERTS_PATH}:/etc/nginx/certs:ro
+      - ${DOCKER_SOCK}:/tmp/docker.sock:ro
+
+  nginx-gen:
+    restart: always
+    image: bingozb/nginx-gen
+    container_name: ${NGINX_GEN_NAME}
+    volumes_from:
+      - nginx-root
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    command: -notify-sighup ${NGINX_ROOT_NAME} -watch -wait ${NGINX_GEN_WAIT_TIME} /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
+
+  nginx-certbot:
+    restart: always
+    image: bingozb/nginx-certbot
+    container_name: ${NGINX_CERTBOT_NAME}
+    environment:
+      - NGINX_DOCKER_GEN_CONTAINER=${NGINX_GEN_NAME}
+      - NGINX_PROXY_CONTAINER=${NGINX_ROOT_NAME}
+    volumes_from:
+      - nginx-root
+    volumes:
+      - ${NGINX_CERTS_PATH}:/etc/nginx/certs:rw
+      - ${DOCKER_SOCK}:/var/run/docker.sock:ro
+
+networks:
+  default:
+    external:
+      name: ${NGINX_PROXY_NETWORK}
